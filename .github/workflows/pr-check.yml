@@ -1,0 +1,26 @@
+# The gate. Every pull request must answer one question before it can land:
+# does the page still work? Not "is the code nice" — does it actually run.
+name: PR check
+
+on:
+  pull_request:
+
+jobs:
+  works:
+    name: Does it still work?
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Check the page still works
+        run: npm run check
