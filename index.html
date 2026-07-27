@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Renters rente · Compound Growth Explorer</title>
+<style>
+  /* ---------- Design tokens ---------------------------------------- */
+  :root{
+    --bg:            #0A0D13;
+    --bg-glow:       #101724;
+    --surface:       #121722;
+    --surface-2:     #171D2B;
+    --line:          #232B3C;
+    --line-soft:     #1C2331;
+
+    --ink:           #EEF2F9;
+    --ink-2:         #A7B1C4;
+    --ink-3:         #6C7789;
+
+    /* Scenario A — teal */
+    --a:             #5EEAD4;
+    --a-deep:        #0E6B63;
+    --a-glow:        rgba(94,234,212,.16);
+    /* Scenario B — amber */
+    --b:             #FFB86B;
+    --b-deep:        #7A4E1E;
+    --b-glow:        rgba(255,184,107,.14);
+
+    --radius:        14px;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 12% -8%, var(--bg-glow) 0%, transparent 62%),
+      radial-gradient(900px 600px at 92% 0%, #131a26 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    padding:clamp(20px, 4vw, 56px) clamp(16px, 4vw, 48px) 72px;
+  }
+
+  .wrap{ max-width:1180px; margin:0 auto; }
+
+  /* ---------- Header ------------------------------------------------ */
+  header{
+    display:flex; flex-wrap:wrap; align-items:flex-end;
+    justify-content:space-between; gap:20px;
+    padding-bottom:22px; margin-bottom:26px;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:600; margin:0 0 8px;
+  }
+  h1{
+    font-family:var(--serif);
+    font-weight:400; font-size:clamp(28px, 4.2vw, 42px);
+    line-height:1.1; letter-spacing:-.01em; margin:0;
+  }
+  h1 em{ font-style:italic; color:var(--a); }
+  .lede{ margin:10px 0 0; color:var(--ink-2); max-width:46ch; font-size:14.5px; }
+
+  /* ---------- Compare switch --------------------------------------- */
+  .switch{
+    display:inline-flex; align-items:center; gap:11px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; padding:8px 15px 8px 12px; cursor:pointer;
+    user-select:none; white-space:nowrap;
+    transition:border-color .18s ease, background .18s ease;
+  }
+  .switch:hover{ border-color:#303A4E; }
+  .switch input{ position:absolute; opacity:0; pointer-events:none; }
+  .track{
+    width:38px; height:21px; border-radius:999px; background:#232B3C;
+    position:relative; transition:background .2s ease; flex:none;
+  }
+  .track::after{
+    content:""; position:absolute; top:3px; left:3px;
+    width:15px; height:15px; border-radius:50%;
+    background:var(--ink-3); transition:transform .2s cubic-bezier(.3,.9,.4,1), background .2s ease;
+  }
+  .switch input:checked + .track{ background:var(--b-deep); }
+  .switch input:checked + .track::after{ transform:translateX(17px); background:var(--b); }
+  .switch input:focus-visible + .track{ outline:2px solid var(--a); outline-offset:3px; }
+  .switch span.lbl{ font-size:13px; font-weight:600; letter-spacing:.01em; color:var(--ink-2); }
+  .switch input:checked ~ span.lbl{ color:var(--ink); }
+
+  /* ---------- Cards -------------------------------------------------- */
+  .card{
+    background:linear-gradient(180deg, var(--surface-2), var(--surface));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 18px 40px -28px rgba(0,0,0,.9);
+  }
+
+  /* ---------- Chart -------------------------------------------------- */
+  .chart-card{ padding:22px 22px 14px; margin-bottom:22px; }
+  .chart-head{
+    display:flex; flex-wrap:wrap; gap:14px 24px;
+    align-items:baseline; justify-content:space-between; margin-bottom:6px;
+  }
+  .chart-title{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
+  .legend{ display:flex; gap:18px; flex-wrap:wrap; }
+  .legend .item{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-2); }
+  .legend .key{ width:11px; height:11px; border-radius:3px; flex:none; }
+  .legend .key.dash{
+    width:14px; height:0; border-radius:0;
+    border-top:2px dashed var(--ink-3); background:none;
+  }
+  #chartHost{ position:relative; width:100%; }
+  svg{ display:block; width:100%; overflow:visible; }
+  svg text{ font-family:var(--sans); font-variant-numeric:tabular-nums; }
+  .tip{
+    position:absolute; pointer-events:none; opacity:0;
+    transform:translate(-50%,-100%);
+    background:rgba(9,12,18,.94); border:1px solid var(--line);
+    border-radius:10px; padding:9px 12px; min-width:158px;
+    box-shadow:0 14px 34px -16px rgba(0,0,0,.95);
+    transition:opacity .12s ease; z-index:5;
+    backdrop-filter:blur(6px);
+  }
+  .tip .yr{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); font-weight:600; margin-bottom:6px; }
+  .tip .row{ display:flex; align-items:center; gap:8px; justify-content:space-between; font-size:13px; }
+  .tip .row + .row{ margin-top:3px; }
+  .tip .row .nm{ display:flex; align-items:center; gap:7px; color:var(--ink-2); }
+  .tip .row .nm i{ width:9px; height:9px; border-radius:2px; display:block; }
+  .tip .row b{ font-weight:650; font-variant-numeric:tabular-nums; }
+
+  /* ---------- Scenario grid ----------------------------------------- */
+  .grid{ display:grid; gap:22px; grid-template-columns:1fr; }
+  .grid.dual{ grid-template-columns:1fr 1fr; }
+  @media (max-width:880px){ .grid.dual{ grid-template-columns:1fr; } }
+
+  .scn{
+    padding:20px 22px 24px; position:relative; overflow:hidden;
+    display:grid; grid-template-columns:1fr; column-gap:44px;
+  }
+  .scn-head, .controls, .result{ min-width:0; }
+  /* Solo scenario: sliders left, outcome right */
+  .grid:not(.dual) .scn{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .grid:not(.dual) .scn-head{ grid-column:1 / -1; }
+  .grid:not(.dual) .result{ margin-top:0; padding-top:0; border-top:none; }
+  @media (max-width:760px){
+    .grid:not(.dual) .scn{ grid-template-columns:1fr; }
+    .grid:not(.dual) .result{ margin-top:24px; padding-top:20px; border-top:1px solid var(--line-soft); }
+  }
+  .scn::before{
+    content:""; position:absolute; inset:0 0 auto; height:2px;
+    background:linear-gradient(90deg, var(--accent), transparent 78%);
+    opacity:.85;
+  }
+  .scn[data-k="a"]{ --accent:var(--a); --accent-deep:var(--a-deep); --accent-glow:var(--a-glow); }
+  .scn[data-k="b"]{ --accent:var(--b); --accent-deep:var(--b-deep); --accent-glow:var(--b-glow); }
+
+  .scn-head{ display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .badge{
+    width:24px; height:24px; border-radius:7px; flex:none;
+    display:grid; place-items:center;
+    font-size:12px; font-weight:700; color:#0A0D13; background:var(--accent);
+  }
+  .scn-name{
+    font:inherit; font-size:15px; font-weight:650; color:var(--ink);
+    background:transparent; border:1px solid transparent; border-radius:7px;
+    padding:3px 8px; margin-left:-8px; width:100%; max-width:230px;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .scn-name:hover{ border-color:var(--line); }
+  .scn-name:focus{ outline:none; border-color:var(--accent); background:rgba(0,0,0,.25); }
+
+  /* ---------- Sliders ------------------------------------------------ */
+  .ctrl + .ctrl{ margin-top:17px; }
+  .ctrl-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px; }
+  .ctrl-top label{ font-size:12.5px; color:var(--ink-2); letter-spacing:.005em; }
+  .ctrl-top output{
+    font-size:14px; font-weight:650; font-variant-numeric:tabular-nums;
+    color:var(--ink); letter-spacing:-.01em;
+  }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:20px; margin:0; background:transparent; cursor:grab; display:block;
+  }
+  input[type=range]:active{ cursor:grabbing; }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:5px; border-radius:999px;
+    background:linear-gradient(90deg, var(--accent) 0 var(--pct,0%), #222A39 var(--pct,0%) 100%);
+  }
+  input[type=range]::-moz-range-track{ height:5px; border-radius:999px; background:#222A39; }
+  input[type=range]::-moz-range-progress{ height:5px; border-radius:999px; background:var(--accent); }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; margin-top:-5.5px; border-radius:50%;
+    background:#fff; border:3px solid var(--accent);
+    box-shadow:0 0 0 0 var(--accent-glow); transition:box-shadow .18s ease, transform .12s ease;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:50%;
+    background:#fff; border:3px solid var(--accent);
+    box-shadow:0 0 0 0 var(--accent-glow); transition:box-shadow .18s ease;
+  }
+  input[type=range]:hover::-webkit-slider-thumb{ box-shadow:0 0 0 7px var(--accent-glow); }
+  input[type=range]:hover::-moz-range-thumb{ box-shadow:0 0 0 7px var(--accent-glow); }
+  input[type=range]:focus{ outline:none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb{ box-shadow:0 0 0 7px var(--accent-glow); transform:scale(1.08); }
+  input[type=range]:focus-visible::-moz-range-thumb{ box-shadow:0 0 0 7px var(--accent-glow); }
+  .scale{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-3); margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  /* ---------- Result block ------------------------------------------- */
+  .result{ margin-top:24px; padding-top:20px; border-top:1px solid var(--line-soft); }
+  .total-lbl{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
+  .total{
+    font-family:var(--serif); font-size:clamp(30px, 4.6vw, 40px); line-height:1.06;
+    letter-spacing:-.015em; margin:5px 0 2px; font-variant-numeric:tabular-nums;
+  }
+  .sub{ font-size:12.5px; color:var(--ink-3); }
+  .sub b{ color:var(--ink-2); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  .split{ margin-top:18px; }
+  .bar{ display:flex; height:10px; border-radius:999px; overflow:hidden; background:#222A39; }
+  .bar .seg{ height:100%; transition:width .18s ease; }
+  .seg.cont{ background:var(--accent-deep); }
+  .seg.grow{ background:var(--accent); }
+  .split-rows{ margin-top:12px; display:grid; gap:9px; }
+  .split-row{ display:flex; align-items:center; gap:10px; font-size:13px; }
+  .split-row .dot{ width:10px; height:10px; border-radius:3px; flex:none; }
+  .split-row .nm{ color:var(--ink-2); }
+  .split-row .pc{ color:var(--ink-3); font-size:12px; font-variant-numeric:tabular-nums; }
+  .split-row .vl{ margin-left:auto; font-weight:650; font-variant-numeric:tabular-nums; }
+
+  .delta{
+    margin-top:18px; padding:11px 13px; border-radius:10px;
+    background:rgba(255,184,107,.07); border:1px solid rgba(255,184,107,.22);
+    font-size:13px; color:var(--ink-2); line-height:1.45;
+  }
+  .delta b{ color:var(--b); font-weight:650; font-variant-numeric:tabular-nums; }
+  .delta.neg{ background:rgba(148,163,184,.06); border-color:rgba(148,163,184,.2); }
+  .delta.neg b{ color:var(--ink); }
+
+  footer{
+    margin-top:34px; padding-top:18px; border-top:1px solid var(--line-soft);
+    font-size:12.5px; color:var(--ink-3); max-width:78ch; line-height:1.6;
+  }
+  .hide{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="eyebrow">Renters rente · DKK</p>
+      <h1>Hvad bliver dine penge <em>til?</em></h1>
+      <p class="lede">Træk i knapperne og se opsparingen vokse. Sammenlign to scenarier side om side.</p>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="cmp">
+      <span class="track"></span>
+      <span class="lbl">Sammenlign to scenarier</span>
+    </label>
+  </header>
+
+  <section class="card chart-card">
+    <div class="chart-head">
+      <div class="chart-title">Værdi over tid</div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div id="chartHost">
+      <svg id="chart" role="img" aria-label="Graf over porteføljens værdi over tid"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+  </section>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    Beregningen antager månedlige indbetalinger ved slutningen af hver måned og et jævnt, månedligt tilskrevet afkast
+    svarende til det valgte årlige afkast. Der er ikke taget højde for skat, gebyrer eller inflation — det er et
+    regneeksempel, ikke finansiel rådgivning.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Formatting ------------------------------------------- */
+  const kr  = new Intl.NumberFormat('da-DK', {style:'currency', currency:'DKK', maximumFractionDigits:0});
+  const num = new Intl.NumberFormat('da-DK', {maximumFractionDigits:0});
+  const pct = new Intl.NumberFormat('da-DK', {minimumFractionDigits:1, maximumFractionDigits:1});
+  const money = v => kr.format(Math.round(v));
+
+  const one = new Intl.NumberFormat('da-DK', {maximumFractionDigits:1});
+  function compact(v){
+    const a = Math.abs(v);
+    if(a >= 1e9) return one.format(v/1e9) + ' mia.';
+    if(a >= 1e6) return one.format(v/1e6) + ' mio.';
+    return num.format(Math.round(v));
+  }
+
+  /* ---------- State -------------------------------------------------- */
+  const FIELDS = [
+    {k:'start',   label:'Startbeløb',            min:0, max:1000000, step:5000, fmt:money, mark:v=>compact(v)+' kr.'},
+    {k:'monthly', label:'Månedlig indbetaling',  min:0, max:25000,   step:250,  fmt:money, mark:v=>compact(v)+' kr.'},
+    {k:'rate',    label:'Forventet årligt afkast',min:0, max:15,     step:0.1,  fmt:v=>pct.format(v)+' %', mark:v=>pct.format(v)+' %'},
+    {k:'years',   label:'Antal år',              min:1, max:50,      step:1,    fmt:v=>num.format(v)+(v===1?' år':' år'), mark:v=>v+' år'}
+  ];
+
+  const scenarios = [
+    {key:'a', name:'Scenarie A', start:50000,  monthly:3000, rate:7,   years:25},
+    {key:'b', name:'Scenarie B', start:50000,  monthly:5000, rate:5,   years:25}
+  ];
+
+  let compare = false;
+
+  /* ---------- Maths -------------------------------------------------- */
+  function project(s){
+    const rm = Math.pow(1 + s.rate/100, 1/12) - 1;
+    const months = Math.round(s.years * 12);
+    const pts = new Array(months + 1);
+    let bal = s.start, contributed = s.start;
+    pts[0] = {m:0, value:bal, contributed:contributed};
+    for(let m = 1; m <= months; m++){
+      bal = bal * (1 + rm) + s.monthly;
+      contributed += s.monthly;
+      pts[m] = {m:m, value:bal, contributed:contributed};
+    }
+    return pts;
+  }
+
+  /* ---------- Build the scenario cards ------------------------------- */
+  const grid = document.getElementById('grid');
+  const ui = {};
+
+  scenarios.forEach(function(s, i){
+    const card = document.createElement('section');
+    card.className = 'card scn';
+    card.dataset.k = s.key;
+
+    let html = ''
+      + '<div class="scn-head">'
+      +   '<span class="badge">' + s.key.toUpperCase() + '</span>'
+      +   '<input class="scn-name" value="' + s.name + '" aria-label="Navn på scenarie" spellcheck="false">'
+      + '</div>'
+      + '<div class="controls">';
+
+    FIELDS.forEach(function(f){
+      const id = f.k + '-' + s.key;
+      html += ''
+        + '<div class="ctrl">'
+        +   '<div class="ctrl-top">'
+        +     '<label for="' + id + '">' + f.label + '</label>'
+        +     '<output for="' + id + '" id="out-' + id + '"></output>'
+        +   '</div>'
+        +   '<input type="range" id="' + id + '" data-f="' + f.k + '" min="' + f.min + '" max="' + f.max + '" step="' + f.step + '" value="' + s[f.k] + '">'
+        +   '<div class="scale"><span>' + f.mark(f.min) + '</span><span>' + f.mark(f.max) + '</span></div>'
+        + '</div>';
+    });
+
+    html += ''
+      + '</div>'
+      + '<div class="result">'
+      +   '<div class="total-lbl">Værdi efter <span class="ry"></span> år</div>'
+      +   '<div class="total"></div>'
+      +   '<div class="sub"></div>'
+      +   '<div class="split">'
+      +     '<div class="bar"><div class="seg cont"></div><div class="seg grow"></div></div>'
+      +     '<div class="split-rows">'
+      +       '<div class="split-row"><span class="dot" style="background:var(--accent-deep)"></span><span class="nm">Indbetalt i alt</span><span class="pc c-pc"></span><span class="vl c-vl"></span></div>'
+      +       '<div class="split-row"><span class="dot" style="background:var(--accent)"></span><span class="nm">Afkast i alt</span><span class="pc g-pc"></span><span class="vl g-vl"></span></div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="delta hide"></div>'
+      + '</div>';
+
+    card.innerHTML = html;
+    grid.appendChild(card);
+
+    const refs = {card:card, outs:{}, ranges:{}};
+    FIELDS.forEach(function(f){
+      const id = f.k + '-' + s.key;
+      const r = card.querySelector('#' + id);
+      refs.ranges[f.k] = r;
+      refs.outs[f.k]   = card.querySelector('#out-' + id);
+      r.addEventListener('input', function(){
+        s[f.k] = parseFloat(r.value);
+        render();
+      });
+    });
+    refs.name = card.querySelector('.scn-name');
+    refs.name.addEventListener('input', function(){
+      s.name = refs.name.value.trim() || (s.key === 'a' ? 'Scenarie A' : 'Scenarie B');
+      render();
+    });
+    refs.total = card.querySelector('.total');
+    refs.ry    = card.querySelector('.ry');
+    refs.sub   = card.querySelector('.sub');
+    refs.segC  = card.querySelector('.seg.cont');
+    refs.segG  = card.querySelector('.seg.grow');
+    refs.cVl   = card.querySelector('.c-vl');
+    refs.gVl   = card.querySelector('.g-vl');
+    refs.cPc   = card.querySelector('.c-pc');
+    refs.gPc   = card.querySelector('.g-pc');
+    refs.delta = card.querySelector('.delta');
+    ui[s.key]  = refs;
+
+    if(i === 1) card.classList.add('hide');
+  });
+
+  /* ---------- Compare toggle ----------------------------------------- */
+  const cmp = document.getElementById('cmp');
+  cmp.addEventListener('change', function(){
+    compare = cmp.checked;
+    ui.b.card.classList.toggle('hide', !compare);
+    grid.classList.toggle('dual', compare);
+    render();
+  });
+
+  /* ---------- Chart --------------------------------------------------- */
+  const NS    = 'http://www.w3.org/2000/svg';
+  const svg   = document.getElementById('chart');
+  const host  = document.getElementById('chartHost');
+  const tip   = document.getElementById('tip');
+  const PAD   = {t:18, r:16, b:30, l:64};
+
+  function el(name, attrs){
+    const n = document.createElementNS(NS, name);
+    for(const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  function niceTicks(max, count){
+    if(max <= 0) return [0];
+    const raw  = max / count;
+    const mag  = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag;
+    const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+    const out  = [];
+    for(let v = 0; v <= max + step * 0.5; v += step) out.push(v);
+    return out;
+  }
+
+  let chartState = null;
+
+  function drawChart(seriesA, seriesB){
+    const W = Math.max(320, host.clientWidth);
+    const H = Math.max(260, Math.min(430, Math.round(W * 0.42)));
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('height', H);
+    svg.style.height = H + 'px';
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const iw = W - PAD.l - PAD.r;
+    const ih = H - PAD.t - PAD.b;
+
+    const maxMonths = Math.max(seriesA.length - 1, seriesB ? seriesB.length - 1 : 0);
+    let peak = seriesA[seriesA.length - 1].value;
+    if(seriesB) peak = Math.max(peak, seriesB[seriesB.length - 1].value);
+
+    const ticks = niceTicks(peak, 5);
+    const yMax  = Math.max(ticks[ticks.length - 1], 1);
+
+    const X = m => PAD.l + (maxMonths ? (m / maxMonths) * iw : 0);
+    const Y = v => PAD.t + ih - (v / yMax) * ih;
+
+    /* gradients */
+    const defs = el('defs');
+    [['gA', 'var(--a)', .30, .02],
+     ['gC', 'var(--a-deep)', .70, .30],
+     ['gB', 'var(--b)', .30, .02]].forEach(function(g){
+      const lg = el('linearGradient', {id:g[0], x1:0, y1:0, x2:0, y2:1});
+      lg.appendChild(el('stop', {offset:'0%',   'stop-color':g[1], 'stop-opacity':g[2]}));
+      lg.appendChild(el('stop', {offset:'100%', 'stop-color':g[1], 'stop-opacity':g[3]}));
+      defs.appendChild(lg);
+    });
+    svg.appendChild(defs);
+
+    /* y grid + labels */
+    ticks.forEach(function(t){
+      const y = Y(t);
+      svg.appendChild(el('line', {x1:PAD.l, x2:W - PAD.r, y1:y, y2:y,
+        stroke: t === 0 ? '#2B344A' : '#1B2231', 'stroke-width':1}));
+      const lb = el('text', {x:PAD.l - 12, y:y + 4, 'text-anchor':'end',
+        fill:'#6C7789', 'font-size':11});
+      lb.textContent = t === 0 ? '0' : compact(t);
+      svg.appendChild(lb);
+    });
+
+    /* x labels */
+    const totalYears = Math.round(maxMonths / 12);
+    const stepY = totalYears <= 10 ? 1 : totalYears <= 20 ? 2 : totalYears <= 30 ? 5 : 10;
+    for(let y = 0; y <= totalYears; y += stepY){
+      const t = el('text', {x:X(y * 12), y:H - PAD.b + 20, 'text-anchor':'middle',
+        fill:'#6C7789', 'font-size':11});
+      t.textContent = y === 0 ? 'nu' : 'år ' + y;
+      svg.appendChild(t);
+    }
+
+    function path(pts, key){
+      let d = '';
+      for(let i = 0; i < pts.length; i++){
+        d += (i ? 'L' : 'M') + X(pts[i].m).toFixed(2) + ' ' + Y(pts[i][key]).toFixed(2);
+      }
+      return d;
+    }
+    function area(pts, key){
+      return path(pts, key) + 'L' + X(pts[pts.length-1].m).toFixed(2) + ' ' + Y(0).toFixed(2)
+           + 'L' + X(0).toFixed(2) + ' ' + Y(0).toFixed(2) + 'Z';
+    }
+
+    if(!seriesB){
+      /* Solo: stack the contributed base under the growth, so the split is visible */
+      svg.appendChild(el('path', {d:area(seriesA, 'value'),       fill:'url(#gA)'}));
+      svg.appendChild(el('path', {d:area(seriesA, 'contributed'), fill:'url(#gC)'}));
+      svg.appendChild(el('path', {d:path(seriesA, 'contributed'), fill:'none',
+        stroke:'var(--a)', 'stroke-width':1.5, 'stroke-dasharray':'4 4', opacity:.55}));
+      svg.appendChild(el('path', {d:path(seriesA, 'value'), fill:'none',
+        stroke:'var(--a)', 'stroke-width':2.4, 'stroke-linejoin':'round', 'stroke-linecap':'round'}));
+    }else{
+      /* Compare: light fills only, taller curve behind so neither hides the other */
+      const layers = [
+        {pts:seriesA, col:'var(--a)', grad:'url(#gA)'},
+        {pts:seriesB, col:'var(--b)', grad:'url(#gB)'}
+      ].sort((p, q) => q.pts[q.pts.length-1].value - p.pts[p.pts.length-1].value);
+
+      layers.forEach(function(L){
+        svg.appendChild(el('path', {d:area(L.pts, 'value'), fill:L.grad, opacity:.55}));
+      });
+      layers.forEach(function(L){
+        svg.appendChild(el('path', {d:path(L.pts, 'contributed'), fill:'none',
+          stroke:L.col, 'stroke-width':1.5, 'stroke-dasharray':'4 4', opacity:.5}));
+        svg.appendChild(el('path', {d:path(L.pts, 'value'), fill:'none',
+          stroke:L.col, 'stroke-width':2.4, 'stroke-linejoin':'round', 'stroke-linecap':'round'}));
+      });
+    }
+
+    /* hover furniture */
+    const guide = el('line', {y1:PAD.t, y2:PAD.t + ih, stroke:'#43506B', 'stroke-width':1,
+      'stroke-dasharray':'3 3', opacity:0});
+    const dotA  = el('circle', {r:4.5, fill:'var(--a)', stroke:'#0A0D13', 'stroke-width':2, opacity:0});
+    const dotB  = el('circle', {r:4.5, fill:'var(--b)', stroke:'#0A0D13', 'stroke-width':2, opacity:0});
+    svg.appendChild(guide); svg.appendChild(dotA); svg.appendChild(dotB);
+
+    chartState = {W:W, H:H, X:X, Y:Y, maxMonths:maxMonths, a:seriesA, b:seriesB,
+                  guide:guide, dotA:dotA, dotB:dotB};
+  }
+
+  function hover(clientX){
+    const st = chartState;
+    if(!st) return;
+    const r  = svg.getBoundingClientRect();
+    const px = (clientX - r.left) * (st.W / r.width);
+    const frac = Math.min(1, Math.max(0, (px - PAD.l) / (st.W - PAD.l - PAD.r)));
+    const m = Math.round(frac * st.maxMonths);
+
+    const pa = st.a[Math.min(m, st.a.length - 1)];
+    const pb = st.b ? st.b[Math.min(m, st.b.length - 1)] : null;
+    const x  = st.X(m);
+
+    st.guide.setAttribute('x1', x); st.guide.setAttribute('x2', x); st.guide.setAttribute('opacity', 1);
+    st.dotA.setAttribute('cx', x); st.dotA.setAttribute('cy', st.Y(pa.value)); st.dotA.setAttribute('opacity', 1);
+    if(pb){
+      st.dotB.setAttribute('cx', x); st.dotB.setAttribute('cy', st.Y(pb.value)); st.dotB.setAttribute('opacity', 1);
+    }
+
+    const yr = Math.floor(m / 12), mo = m % 12;
+    let html = '<div class="yr">' + (m === 0 ? 'I dag' : (yr ? yr + ' år' : '') + (mo ? (yr ? ' ' : '') + mo + ' mdr.' : '')) + '</div>'
+      + '<div class="row"><span class="nm"><i style="background:var(--a)"></i>' + esc(scenarios[0].name) + '</span><b>' + money(pa.value) + '</b></div>';
+    if(pb){
+      html += '<div class="row"><span class="nm"><i style="background:var(--b)"></i>' + esc(scenarios[1].name) + '</span><b>' + money(pb.value) + '</b></div>'
+            + '<div class="row"><span class="nm">Forskel</span><b>' + money(Math.abs(pb.value - pa.value)) + '</b></div>';
+    }else{
+      html += '<div class="row"><span class="nm"><i style="background:var(--a-deep)"></i>Indbetalt</span><b>' + money(pa.contributed) + '</b></div>'
+            + '<div class="row"><span class="nm"><i style="background:var(--a)"></i>Afkast</span><b>' + money(pa.value - pa.contributed) + '</b></div>';
+    }
+    tip.innerHTML = html;
+
+    const scale = r.width / st.W;
+    let left = x * scale;
+    const tw = tip.offsetWidth;
+    left = Math.min(Math.max(left, tw / 2 + 4), r.width - tw / 2 - 4);
+    tip.style.left = left + 'px';
+    tip.style.top  = (Math.min(st.Y(pa.value), pb ? st.Y(pb.value) : Infinity) * scale - 14) + 'px';
+    tip.style.opacity = 1;
+  }
+
+  function unhover(){
+    tip.style.opacity = 0;
+    if(!chartState) return;
+    chartState.guide.setAttribute('opacity', 0);
+    chartState.dotA.setAttribute('opacity', 0);
+    chartState.dotB.setAttribute('opacity', 0);
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  svg.addEventListener('mousemove', e => hover(e.clientX));
+  svg.addEventListener('mouseleave', unhover);
+  svg.addEventListener('touchstart', e => { hover(e.touches[0].clientX); }, {passive:true});
+  svg.addEventListener('touchmove',  e => { hover(e.touches[0].clientX); }, {passive:true});
+  svg.addEventListener('touchend', unhover);
+
+  /* ---------- Render --------------------------------------------------- */
+  function render(){
+    const series = {};
+
+    scenarios.forEach(function(s){
+      const refs = ui[s.key];
+
+      FIELDS.forEach(function(f){
+        const r = refs.ranges[f.k];
+        refs.outs[f.k].textContent = f.fmt(s[f.k]);
+        r.style.setProperty('--pct', ((s[f.k] - f.min) / (f.max - f.min) * 100) + '%');
+      });
+
+      const pts   = project(s);
+      series[s.key] = pts;
+      const last  = pts[pts.length - 1];
+      const grown = last.value - last.contributed;
+      const gPct  = last.value > 0 ? grown / last.value * 100 : 0;
+
+      refs.ry.textContent    = num.format(s.years);
+      refs.total.textContent = money(last.value);
+
+      if(last.contributed < 1){
+        refs.sub.innerHTML = 'Sæt et startbeløb eller en månedlig indbetaling for at komme i gang.';
+      }else if(grown < 1){
+        refs.sub.innerHTML = 'Uden afkast får du præcis det ud, du har lagt ind.';
+      }else{
+        refs.sub.innerHTML = 'Heraf <b>' + money(grown) + '</b> ren vækst — dine penge er <b>'
+          + pct.format(last.value / last.contributed) + '</b> gange større.';
+      }
+
+      refs.cVl.textContent   = money(last.contributed);
+      refs.gVl.textContent   = money(grown);
+      refs.cPc.textContent   = pct.format(100 - gPct) + ' %';
+      refs.gPc.textContent   = pct.format(gPct) + ' %';
+      refs.segC.style.width  = last.value < 1 ? '0%' : (100 - gPct) + '%';
+      refs.segG.style.width  = last.value < 1 ? '0%' : gPct + '%';
+    });
+
+    /* legend */
+    const legend = document.getElementById('legend');
+    const keys = compare
+      ? [['var(--a)', scenarios[0].name], ['var(--b)', scenarios[1].name], ['dash', 'Indbetalt']]
+      : [['var(--a-deep)', 'Indbetalt'], ['var(--a)', 'Afkast']];
+    legend.innerHTML = keys.map(function(k){
+      const key = k[0] === 'dash' ? '<span class="key dash"></span>'
+                                  : '<span class="key" style="background:' + k[0] + '"></span>';
+      return '<div class="item">' + key + esc(k[1]) + '</div>';
+    }).join('');
+
+    /* comparison note */
+    const aLast = series.a[series.a.length - 1].value;
+    const bLast = series.b[series.b.length - 1].value;
+    [['a', aLast, bLast, scenarios[1].name], ['b', bLast, aLast, scenarios[0].name]].forEach(function(row){
+      const box = ui[row[0]].delta;
+      if(!compare){ box.classList.add('hide'); return; }
+      box.classList.remove('hide');
+      const diff = row[1] - row[2];
+      box.classList.toggle('neg', diff < 0);
+      if(Math.abs(diff) < 1){
+        box.innerHTML = 'Præcis det samme som ' + esc(row[3]) + '.';
+      }else{
+        box.innerHTML = (diff > 0 ? '<b>' + money(diff) + ' mere</b> end ' : '<b>' + money(-diff) + ' mindre</b> end ')
+                      + esc(row[3]) + '.';
+      }
+    });
+
+    drawChart(series.a, compare ? series.b : null);
+    unhover();
+  }
+
+  let rt;
+  window.addEventListener('resize', function(){
+    clearTimeout(rt);
+    rt = setTimeout(render, 90);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
