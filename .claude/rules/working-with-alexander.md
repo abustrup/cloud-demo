@@ -1,4 +1,4 @@
-# Working with Alexander (portable contract) — DELIBERATELY STALE TEST COPY
+# Working with Alexander (portable contract)
 
 <!-- Generated from ~/.claude/CLAUDE.md, the source of truth. Deliberately de-identified: no age,
 school, employer, machine paths, or anything else personal, because most repos it lands in are
